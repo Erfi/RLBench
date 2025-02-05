@@ -39,7 +39,7 @@ for task_file in TASKS:
     for obs_mode in ["state", "vision"]:
         register(
             id=f"rlbench/{task_name}-{obs_mode}-v0",
-            entry_point="rlbench.gym:RLBenchEnv",
+            entry_point="rlbench.gym_rlbench_environment:RLBenchEnv",
             kwargs={
                 "task_class": task_class,
                 "observation_mode": obs_mode,
