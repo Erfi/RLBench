@@ -8,7 +8,13 @@ from pyrep.objects.vision_sensor import VisionSensor
 from pyrep.const import RenderMode
 
 from rlbench.demo import Demo
-from rlbench.action_modes.action_mode import JointPositionActionMode
+from rlbench.action_modes.action_mode import (
+    JointPositionAbsoluteActionMode,
+    JointPositionRelativeActionMode,
+    EEPlannerAbsoluteActionMode,
+    EEPlannerRelativeActionMode,
+)
+
 from rlbench.environment import Environment
 from rlbench.observation_config import ObservationConfig
 from rlbench.utils import GripperPoseBox
@@ -28,26 +34,38 @@ class RLBenchEnv(gym.Env):
     def __init__(
         self,
         task_class,
-        observation_mode="state",
+        observation_type="state",
+        action_type="ee_pose_absolute",
         render_mode: Union[None, str] = None,
-        action_mode=None,
     ):
         self.task_class = task_class
-        self.observation_mode = observation_mode
+        self.observation_type = observation_type
+        self.action_type = action_type
+
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
-        obs_config = ObservationConfig()
-        if observation_mode == "state":
-            obs_config.set_all_high_dim(False)
-            obs_config.set_all_low_dim(True)
-        elif observation_mode == "vision":
-            obs_config.set_all(True)
+
+        self.obs_config = ObservationConfig()
+        if self.observation_type == "state":
+            self.obs_config.set_all_high_dim(False)
+            self.obs_config.set_all_low_dim(True)
+        elif self.observation_type == "vision":
+            self.obs_config.set_all(True)
         else:
-            raise ValueError("Unrecognised observation_mode: %s." % observation_mode)
-        self.obs_config = obs_config
-        if action_mode is None:
-            action_mode = JointPositionActionMode()
-        self.action_mode = action_mode
+            raise ValueError(
+                "Unrecognised observation_type: %s." % self.observation_type
+            )
+
+        if self.action_type == "ee_pose_absolute":
+            self.action_mode = EEPlannerAbsoluteActionMode()
+        elif self.action_type == "ee_pose_relative":
+            self.action_mode = EEPlannerRelativeActionMode()
+        elif self.action_type == "joint_position_absolute":
+            self.action_mode = JointPositionAbsoluteActionMode()
+        elif self.action_type == "joint_position_relative":
+            self.action_mode = JointPositionRelativeActionMode()
+        else:
+            raise ValueError("Unrecognised action type: %s." % self.action_type)
 
         self.rlbench_env = Environment(
             action_mode=self.action_mode,
@@ -67,61 +85,45 @@ class RLBenchEnv(gym.Env):
 
         # --- setup observation and action space ---
         _, obs = self.rlbench_task_env.reset()
-        if self.observation_mode == "state":
-            gym_obs = self._extract_obs_state(obs)
+        gym_obs = self._extract_obs(obs)
+
+        if self.observation_type == "state":
             self.observation_space = spaces.Box(
                 low=-np.inf, high=np.inf, shape=gym_obs.shape, dtype=gym_obs.dtype
             )
 
-        elif self.observation_mode == "vision":
-            gym_obs = self._extract_obs_vision(obs)
+        elif self.observation_type == "vision":
             self.observation_space = spaces.Box(
                 low=0, high=255, shape=gym_obs.shape, dtype=gym_obs.dtype
             )
         else:
-            raise ValueError("Unrecognised observation_mode: %s." % observation_mode)
+            raise ValueError("Unrecognised observation_type: %s." % observation_type)
 
-        action_low, action_high = action_mode.action_bounds()
-        self.action_space = GripperPoseBox(
-            low=np.float32(action_low),
-            high=np.float32(action_high),
-            shape=self.rlbench_env.action_shape,
-            dtype=np.float32,
-        )
-
-    def _extract_obs_all(self, rlbench_obs):
-        gym_obs = {}
-        for state_name in [
-            "joint_velocities",
-            "joint_positions",
-            "joint_forces",
-            "gripper_open",
-            "gripper_pose",
-            "gripper_joint_positions",
-            "gripper_touch_forces",
-            "task_low_dim_state",
-        ]:
-            state_data = getattr(rlbench_obs, state_name)
-            if state_data is not None:
-                state_data = np.float32(state_data)
-                if np.isscalar(state_data):
-                    state_data = np.asarray([state_data])
-                gym_obs[state_name] = state_data
-
-        if self.observation_mode == "vision":
-            gym_obs.update(
-                {
-                    "left_shoulder_rgb": rlbench_obs.left_shoulder_rgb,
-                    "left_shoulder_depth": rlbench_obs.left_shoulder_depth,
-                    "right_shoulder_rgb": rlbench_obs.right_shoulder_rgb,
-                    "right_shoulder_depth": rlbench_obs.right_shoulder_depth,
-                    "wrist_rgb": rlbench_obs.wrist_rgb,
-                    "wrist_depth": rlbench_obs.wrist_depth,
-                    "front_rgb": rlbench_obs.front_rgb,
-                    "front_depth": rlbench_obs.front_depth,
-                }
+        action_low, action_high = self.action_mode.action_bounds()
+        if self.action_type in ["ee_pose_absolute", "ee_pose_relative"]:
+            self.action_space = GripperPoseBox(
+                low=np.float32(action_low),
+                high=np.float32(action_high),
+                shape=self.rlbench_env.action_shape,
+                dtype=np.float32,
             )
-        return gym_obs
+        elif self.action_type in ["joint_position_absolute", "joint_position_relative"]:
+            self.action_space = spaces.Box(
+                low=np.float32(action_low),
+                high=np.float32(action_high),
+                shape=self.rlbench_env.action_shape,
+                dtype=np.float32,
+            )
+
+    def _extract_obs(self, rlbench_obs):
+        if self.observation_type == "state":
+            return self._extract_obs_state(rlbench_obs)
+        elif self.observation_type == "vision":
+            return self._extract_obs_vision(rlbench_obs)
+        else:
+            raise ValueError(
+                "Unrecognised observation_type: %s." % self.observation_type
+            )
 
     def _extract_obs_state(self, rlbench_obs):
         """
@@ -176,25 +178,13 @@ class RLBenchEnv(gym.Env):
         else:
             descriptions, obs = self.rlbench_task_env.reset_to_demo(demo=demo)
 
-        # extract from the raw observation
-        if self.observation_mode == "state":
-            extracted_obs = self._extract_obs_state(obs)
-        elif self.observation_mode == "vision":
-            extracted_obs = self._extract_obs_vision(obs)
-
-        return extracted_obs, {"text_descriptions": descriptions}
+        return self._extract_obs(obs), {"text_descriptions": descriptions}
 
     def step(self, action):
         info = {"failed_step": False}
         try:
             obs, reward, terminated = self.rlbench_task_env.step(action)
-            # extract from the raw observation
-            if self.observation_mode == "state":
-                extracted_obs = self._extract_obs_state(obs)
-            elif self.observation_mode == "vision":
-                extracted_obs = self._extract_obs_vision(obs)
-
-            return extracted_obs, reward, terminated, False, info
+            return self._extract_obs(obs), reward, terminated, False, info
         except Exception as e:
             info["failed_step"] = True
             dummy_next_state = self.observation_space.sample() * -1

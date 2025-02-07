@@ -9,6 +9,7 @@ from PIL import Image
 from natsort import natsorted
 from pyrep.objects import VisionSensor
 from gymnasium.spaces import Box
+from pyquaternion import Quaternion
 
 from rlbench.backend.const import *
 from rlbench.backend.utils import image_to_float_array, rgb_handles_to_mask
@@ -459,3 +460,20 @@ class GripperPoseBox(Box):
             [abc[0] * sin_angle, abc[1] * sin_angle, abc[2] * sin_angle, cos_angle]
         )
         return np.concatenate([pos, quat, [gripper_action]])
+
+
+def get_relative_pose(pose1, pose2):
+    """
+    Returns the relative pose from pose1 (current) to pose2 (next)
+    Each pose is a 7D vector [x, y, z, qx, qy, qz, qw] with quaternion in the order of [x, y, z, w]
+    """
+    position1 = np.array(pose1[:3])
+    position2 = np.array(pose2[:3])
+    quat1 = Quaternion(pose1[-1], *pose1[3:-1])
+    quat2 = Quaternion(pose2[-1], *pose2[3:-1])
+    relative_position = position2 - position1
+    relative_quat = quat2 * quat1.inverse
+    relative_quat = np.array(
+        [relative_quat.x, relative_quat.y, relative_quat.z, relative_quat.w]
+    )
+    return np.concatenate([relative_position, relative_quat])

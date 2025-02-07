@@ -36,13 +36,13 @@ TASKS = [
 for task_file in TASKS:
     task_name = task_file.split(".py")[0]
     task_class = name_to_task_class(task_name)
-    for obs_mode in ["state", "vision"]:
+    for obs_type in ["state", "vision"]:
         register(
-            id=f"rlbench/{task_name}-{obs_mode}-v0",
+            id=f"rlbench/{task_name}-{obs_type}-v0",
             entry_point="rlbench.gym_rlbench_environment:RLBenchEnv",
             kwargs={
                 "task_class": task_class,
-                "observation_mode": obs_mode,
+                "observation_type": obs_type,
             },
             nondeterministic=True,
         )
