@@ -88,7 +88,7 @@ class JointPositionRelativeActionMode(ActionMode):
 
     def action_bounds(self):
         """Returns the min and max of the action mode."""
-        return np.array(7 * [-0.1] + [0.0]), np.array(7 * [0.1] + [0.04])
+        return np.array(7 * [-0.1] + [0.0]), np.array(7 * [0.1] + [0.04 + 1e-4])
 
 
 class JointPositionAbsoluteActionMode(ActionMode):
@@ -119,7 +119,9 @@ class JointPositionAbsoluteActionMode(ActionMode):
 
     def action_bounds(self):
         """Returns the min and max of the action mode."""
-        return np.array(7 * [-np.pi / 2] + [0.0]), np.array(7 * [np.pi / 2] + [0.04])
+        return np.array(7 * [-2 * np.pi] + [0.0]), np.array(
+            7 * [2 * np.pi / 2] + [0.04 + 1e-4]
+        )
 
 
 class EEPlannerAbsoluteActionMode(ActionMode):
