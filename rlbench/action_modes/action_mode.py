@@ -119,9 +119,7 @@ class JointPositionAbsoluteActionMode(ActionMode):
 
     def action_bounds(self):
         """Returns the min and max of the action mode."""
-        return np.array(7 * [-2 * np.pi] + [0.0]), np.array(
-            7 * [2 * np.pi / 2] + [0.04 + 1e-4]
-        )
+        return np.array(7 * [-np.pi] + [0.0]), np.array(7 * [np.pi] + [0.04 + 1e-4])
 
 
 class EEPlannerAbsoluteActionMode(ActionMode):
@@ -140,8 +138,11 @@ class EEPlannerAbsoluteActionMode(ActionMode):
         arm_act_size = np.prod(self.arm_action_mode.action_shape(scene))
         arm_action = np.array(action[:arm_act_size])
         pos = arm_action[:3]
-        raw_quat = arm_action[3:]
-        quat = raw_quat / np.linalg.norm(raw_quat)
+        quat = arm_action[3:]
+        quat_norm = np.linalg.norm(quat)
+        if not np.isclose(quat_norm, 1.0):
+            # Not a valid quaternion, normalize it
+            quat = quat / quat_norm
 
         # apply arm action
         arm_action = np.concatenate([pos, quat])
@@ -159,8 +160,8 @@ class EEPlannerAbsoluteActionMode(ActionMode):
 
     def action_bounds(self):
         """Returns the min and max of the action mode."""
-        low = np.array([-0.32, -0.45, 0.75] + 3 * [-1.0] + [-2 * np.pi] + [0.0])
-        high = np.array([0.32, 0.45, 1.75] + 3 * [1.0] + [2 * np.pi] + [1.0])
+        low = np.array([-0.32, -0.45, 0.75] + 4 * [-1.0] + [0.0])
+        high = np.array([0.32, 0.45, 1.75] + 4 * [1.0] + [1.0])
         return low, high
 
 
@@ -180,18 +181,11 @@ class EEPlannerRelativeActionMode(ActionMode):
         arm_act_size = np.prod(self.arm_action_mode.action_shape(scene))
         arm_action = np.array(action[:arm_act_size])
         pos = arm_action[:3]
-        if not np.isclose(np.linalg.norm(arm_action[3:]), 1.0):
-            # Not a valid quaternion, turn into a valid quaternion assiming that the
-            # first 3 values are the axis and the last value is the angle in radians
-            abc = arm_action[3:-1] / np.linalg.norm(arm_action[3:-1])
-            angle = arm_action[-1] / 2  # angle in radians
-            sin_angle = np.sin(angle)
-            cos_angle = np.cos(angle)
-            quat = np.array(
-                [abc[0] * sin_angle, abc[1] * sin_angle, abc[2] * sin_angle, cos_angle]
-            )
-        else:
-            quat = arm_action[3:]
+        quat = arm_action[3:]
+        quat_norm = np.linalg.norm(quat)
+        if not np.isclose(quat_norm, 1.0):
+            # Not a valid quaternion, normalize it
+            quat = quat / quat_norm
 
         # apply arm action
         arm_action = np.concatenate([pos, quat])
@@ -209,6 +203,6 @@ class EEPlannerRelativeActionMode(ActionMode):
 
     def action_bounds(self):
         """Returns the min and max of the action mode."""
-        low = np.array([-0.1, -0.1, -0.1] + 3 * [-1.0] + [-2 * np.pi] + [0.0])
-        high = np.array([0.1, 0.1, 0.1] + 3 * [1.0] + [2 * np.pi] + [1.0])
+        low = np.array([-0.05, -0.05, -0.05] + 4 * [-0.1] + [0.0])
+        high = np.array([0.05, 0.05, 0.05] + 4 * [0.1] + [1.0])
         return low, high

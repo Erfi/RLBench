@@ -1,4 +1,5 @@
 from typing import Union, List, Dict
+import logging
 
 import gymnasium as gym
 import numpy as np
@@ -18,6 +19,8 @@ from rlbench.action_modes.action_mode import (
 from rlbench.environment import Environment
 from rlbench.observation_config import ObservationConfig
 from rlbench.utils import GripperPoseBox
+
+logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.INFO)
 
 
 def convert_dtype_to_float32_if_float(dtype):
@@ -44,6 +47,10 @@ class RLBenchEnv(gym.Env):
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
+
+        logging.info(
+            f"Creating RLBenchEnv: observation_type={observation_type}, action_type={action_type}"
+        )
 
         self.obs_config = ObservationConfig()
         if self.observation_type == "state":
@@ -114,6 +121,8 @@ class RLBenchEnv(gym.Env):
                 shape=self.rlbench_env.action_shape,
                 dtype=np.float32,
             )
+
+        self.last_observation = gym_obs  # for getting relative actions if needed
 
     def _extract_obs(self, rlbench_obs):
         if self.observation_type == "state":

@@ -26,7 +26,7 @@ def get_relative_pose(pose1, pose2):
     return np.concatenate([relative_position, relative_quat])
 
 
-if True:  # USING JOINT_POSITION
+if False:  # USING JOINT_POSITION
     env = gym.make(
         "rlbench/close_drawer-state-v0",
         render_mode="human",
@@ -92,29 +92,32 @@ if False:  # USING EE_POSE
             )
             env.render()
 
-if False:
+if True:
+    env = gym.make(
+        "rlbench/close_drawer-state-v0",
+        render_mode="human",
+        action_type="ee_pose_relative",
+        observation_type="state",
+        max_episode_steps=200,
+    )
     # now just run normal RL loop
-    env.reset()
-    episodes = 1
-    counter = 0
-    terminated = False
-    truncated = False
+    episodes = 5
     for i in range(episodes):
         obs = env.reset()
-        while not terminated:
+        terminated = False
+        truncated = False
+        counter = 0
+        while not (terminated or truncated):
             action = env.action_space.sample()
-            try:
-                obs, reward, terminated, truncated, _ = env.step(action)
-            except Exception as e:
-                continue
+            obs, reward, terminated, truncated, info = env.step(action)
+            if info["failed_step"]:
+                print("Failed step")
+
             print(
                 f"Step:{counter} | Reward: {reward} | Terminated: {terminated} | Truncated: {truncated}"
             )
             env.render()  # Note: rendering increases step time.
             counter += 1
-            if terminated or truncated:
-                obs = env.reset()
-                counter = 0
 
     print("Done")
 
