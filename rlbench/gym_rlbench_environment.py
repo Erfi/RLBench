@@ -205,7 +205,9 @@ class RLBenchEnv(gym.Env):
             return self._extract_obs(obs), reward, terminated, False, info
         except Exception as e:
             info["failed_step"] = True
-            dummy_next_state = self.obs_history[-1]  # Don't change the state
+            dummy_next_state = self._extract_obs(
+                self.obs_history[-1]
+            )  # Don't change the state
             # HACK: since terminated is True, the next_state is not used
             # TODO Reward should be scaled according to the env's reward scaling wrapper
             return (dummy_next_state, 0.0, True, False, info)

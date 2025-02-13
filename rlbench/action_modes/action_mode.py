@@ -234,10 +234,8 @@ class EEPlannerRelativeActionMode(ActionMode):
         arm_action = np.array(action[:arm_act_size])
         pos = arm_action[:3]
         euler = arm_action[3:]
-        r = Rotation.from_euler("xyz", euler, degrees=True)
-        quat = r.as_quat()
-        if quat[3] < 0:  # Ensure positive scalar
-            quat = -quat
+        rot = Rotation.from_euler("xyz", euler, degrees=True)
+        quat = rot.as_quat(canonical=True, scalar_first=False)
 
         # apply arm action
         arm_action = np.concatenate([pos, quat])
@@ -258,6 +256,6 @@ class EEPlannerRelativeActionMode(ActionMode):
         all angles are in degrees
         """
 
-        low = np.array([-0.02, -0.02, -0.02] + 3 * [-5] + [0.0])
-        high = np.array([0.02, 0.02, 0.02] + 3 * [5] + [1.0])
+        low = np.array([-0.01, -0.01, -0.01] + 3 * [-3] + [0.0])
+        high = np.array([0.01, 0.01, 0.01] + 3 * [3] + [1.0])
         return low, high
