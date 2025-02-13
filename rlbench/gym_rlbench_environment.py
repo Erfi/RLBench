@@ -1,12 +1,17 @@
 from typing import Union, List, Dict
 import logging
+from collections import deque
 
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
+from scipy.spatial.transform import Rotation
 from pyrep.objects.dummy import Dummy
 from pyrep.objects.vision_sensor import VisionSensor
 from pyrep.const import RenderMode
+
+from cv2 import resize
+from cv2 import INTER_NEAREST
 
 from rlbench.demo import Demo
 from rlbench.action_modes.action_mode import (
@@ -19,6 +24,7 @@ from rlbench.action_modes.action_mode import (
 from rlbench.environment import Environment
 from rlbench.observation_config import ObservationConfig
 from rlbench.utils import GripperPoseBox
+
 
 logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.INFO)
 
@@ -44,6 +50,7 @@ class RLBenchEnv(gym.Env):
         self.task_class = task_class
         self.observation_type = observation_type
         self.action_type = action_type
+        self.obs_history = deque(maxlen=2)  # used for getting relative actions
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
@@ -101,28 +108,20 @@ class RLBenchEnv(gym.Env):
 
         elif self.observation_type == "vision":
             self.observation_space = spaces.Box(
-                low=0, high=255, shape=gym_obs.shape, dtype=gym_obs.dtype
+                low=0, high=1.0, shape=gym_obs.shape, dtype=gym_obs.dtype
             )
         else:
             raise ValueError("Unrecognised observation_type: %s." % observation_type)
 
         action_low, action_high = self.action_mode.action_bounds()
-        if self.action_type in ["ee_pose_absolute", "ee_pose_relative"]:
-            self.action_space = GripperPoseBox(
-                low=np.float32(action_low),
-                high=np.float32(action_high),
-                shape=self.rlbench_env.action_shape,
-                dtype=np.float32,
-            )
-        elif self.action_type in ["joint_position_absolute", "joint_position_relative"]:
-            self.action_space = spaces.Box(
-                low=np.float32(action_low),
-                high=np.float32(action_high),
-                shape=self.rlbench_env.action_shape,
-                dtype=np.float32,
-            )
+        self.action_space = spaces.Box(
+            low=np.float32(action_low),
+            high=np.float32(action_high),
+            shape=self.rlbench_env.action_shape,
+            dtype=np.float32,
+        )
 
-        self.last_observation = gym_obs  # for getting relative actions if needed
+        self.obs_history.append(gym_obs)
 
     def _extract_obs(self, rlbench_obs):
         if self.observation_type == "state":
@@ -163,8 +162,14 @@ class RLBenchEnv(gym.Env):
         }
         # concatenate all into a single array at the last dimension
         gym_obs = np.concatenate(list(gym_obs.values()), axis=-1)
+        # resize to 64x64
+        gym_obs = resize(gym_obs, (64, 64), interpolation=INTER_NEAREST)
         # turn into channel first
         gym_obs = np.transpose(gym_obs, (2, 0, 1))
+        # scale to [0, 1]
+        gym_obs = gym_obs / 255.0
+        # convert to float32
+        gym_obs = np.float32(gym_obs)
         return gym_obs
 
     def render(self):
@@ -187,18 +192,23 @@ class RLBenchEnv(gym.Env):
         else:
             descriptions, obs = self.rlbench_task_env.reset_to_demo(demo=demo)
 
+        # reset obs_history
+        self.obs_history = deque(maxlen=2)
+        self.obs_history.append(obs)
         return self._extract_obs(obs), {"text_descriptions": descriptions}
 
     def step(self, action):
         info = {"failed_step": False}
         try:
             obs, reward, terminated = self.rlbench_task_env.step(action)
+            self.obs_history.append(obs)
             return self._extract_obs(obs), reward, terminated, False, info
         except Exception as e:
             info["failed_step"] = True
-            dummy_next_state = self.observation_space.sample() * -1
+            dummy_next_state = self.obs_history[-1]  # Don't change the state
             # HACK: since terminated is True, the next_state is not used
-            return dummy_next_state, 0, True, False, info
+            # TODO Reward should be scaled according to the env's reward scaling wrapper
+            return (dummy_next_state, 0.0, True, False, info)
 
     def close(self) -> None:
         self.rlbench_env.shutdown()

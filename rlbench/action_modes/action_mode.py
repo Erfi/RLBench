@@ -1,6 +1,7 @@
 from abc import abstractmethod
 
 import numpy as np
+from scipy.spatial.transform import Rotation
 
 from rlbench.action_modes.arm_action_modes import (
     ArmActionMode,
@@ -165,6 +166,57 @@ class EEPlannerAbsoluteActionMode(ActionMode):
         return low, high
 
 
+# class EEPlannerRelativeActionModeQUATERNION(ActionMode):
+#     """
+#     An action mode that allows the end effector to be moved to a target pose
+#     using the planner. The gripper is controlled using a discrete action space.
+#     """
+
+#     def __init__(self):
+#         super(EEPlannerRelativeActionMode, self).__init__(
+#             EndEffectorPoseViaPlanning(absolute_mode=False), Discrete()
+#         )
+
+#     def action(self, scene, action):
+#         # create a valid quternion (qx, qy, qz, qw) from the action (ai, bj, ck, angle)
+#         arm_act_size = np.prod(self.arm_action_mode.action_shape(scene))
+#         arm_action = np.array(action[:arm_act_size])
+#         pos = arm_action[:3]
+#         quat = arm_action[3:]
+#         quat_norm = np.linalg.norm(quat)
+#         if not np.isclose(quat_norm, 1.0):
+#             # Not a valid quaternion, normalize it
+#             angle_rad = quat[-1]
+#             sin_half_angle = np.sin(angle_rad / 2)
+#             cos_half_angle = np.cos(angle_rad / 2)
+#             quat = [
+#                 quat[0] * sin_half_angle,
+#                 quat[1] * sin_half_angle,
+#                 quat[2] * sin_half_angle,
+#                 cos_half_angle,
+#             ]
+
+#         # apply arm action
+#         arm_action = np.concatenate([pos, quat])
+#         self.arm_action_mode.action(scene, arm_action)
+
+#         # apply gripper action
+#         ee_action = np.array(action[arm_act_size:])
+#         self.gripper_action_mode.action(scene, ee_action)
+
+#     def action_shape(self, scene):
+#         # 3 position + 4 quaternion (qx, qy, qz, w) + 1 gripper
+#         return np.prod(self.arm_action_mode.action_shape(scene)) + np.prod(
+#             self.gripper_action_mode.action_shape(scene)
+#         )
+
+#     def action_bounds(self):
+#         """Returns the min and max of the action mode."""
+#         low = np.array([-0.05, -0.05, -0.05] + 3 * [-0.1] + [-np.pi / 10] + [0.0])
+#         high = np.array([0.05, 0.05, 0.05] + 3 * [0.1] + [np.pi / 10] + [1.0])
+#         return low, high
+
+
 class EEPlannerRelativeActionMode(ActionMode):
     """
     An action mode that allows the end effector to be moved to a target pose
@@ -177,15 +229,15 @@ class EEPlannerRelativeActionMode(ActionMode):
         )
 
     def action(self, scene, action):
-        # create a valid quternion (qx, qy, qz, qw) from the action (ai, bj, ck, angle)
-        arm_act_size = np.prod(self.arm_action_mode.action_shape(scene))
+        # create a valid quternion (qx, qy, qz, qw) from Euler angles (theta_x, theta_y, theta_z)
+        arm_act_size = 6  # 3 position + 3 Euler angles
         arm_action = np.array(action[:arm_act_size])
         pos = arm_action[:3]
-        quat = arm_action[3:]
-        quat_norm = np.linalg.norm(quat)
-        if not np.isclose(quat_norm, 1.0):
-            # Not a valid quaternion, normalize it
-            quat = quat / quat_norm
+        euler = arm_action[3:]
+        r = Rotation.from_euler("xyz", euler, degrees=True)
+        quat = r.as_quat()
+        if quat[3] < 0:  # Ensure positive scalar
+            quat = -quat
 
         # apply arm action
         arm_action = np.concatenate([pos, quat])
@@ -196,13 +248,16 @@ class EEPlannerRelativeActionMode(ActionMode):
         self.gripper_action_mode.action(scene, ee_action)
 
     def action_shape(self, scene):
-        # 3 position + 4 quaternion (qx, qy, qz, w) + 1 gripper
-        return np.prod(self.arm_action_mode.action_shape(scene)) + np.prod(
-            self.gripper_action_mode.action_shape(scene)
-        )
+        # 3 position + 3 Euler angles (theta_x, theta_y, theta_z) + 1 gripper
+        return 7
 
     def action_bounds(self):
-        """Returns the min and max of the action mode."""
-        low = np.array([-0.05, -0.05, -0.05] + 4 * [-0.1] + [0.0])
-        high = np.array([0.05, 0.05, 0.05] + 4 * [0.1] + [1.0])
+        """
+        Returns the min and max of the action mode.
+        [x,y,z,theta_x, theta_y, theta_z, gripper_open]
+        all angles are in degrees
+        """
+
+        low = np.array([-0.02, -0.02, -0.02] + 3 * [-5] + [0.0])
+        high = np.array([0.02, 0.02, 0.02] + 3 * [5] + [1.0])
         return low, high

@@ -467,13 +467,20 @@ def get_relative_pose(pose1, pose2):
     Returns the relative pose from pose1 (current) to pose2 (next)
     Each pose is a 7D vector [x, y, z, qx, qy, qz, qw] with quaternion in the order of [x, y, z, w]
     """
-    position1 = np.array(pose1[:3])
-    position2 = np.array(pose2[:3])
-    quat1 = Quaternion(pose1[-1], *pose1[3:-1])
-    quat2 = Quaternion(pose2[-1], *pose2[3:-1])
-    relative_position = position2 - position1
+    relative_position = get_relative_position(pose1[:3], pose2[:3])
+    relative_quaternion = get_relative_quaternion(pose1[3:], pose2[3:])
+    return np.concatenate([relative_position, relative_quaternion])
+
+
+def get_relative_position(pos1, pos2):
+    return pos2 - pos1
+
+
+def get_relative_quaternion(quat1, quat2):
+    quat1 = Quaternion(quat1[-1], *quat1[:-1])
+    quat2 = Quaternion(quat2[-1], *quat2[:-1])
     relative_quat = quat2 * quat1.inverse
     relative_quat = np.array(
         [relative_quat.x, relative_quat.y, relative_quat.z, relative_quat.w]
     )
-    return np.concatenate([relative_position, relative_quat])
+    return relative_quat
