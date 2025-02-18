@@ -19,6 +19,7 @@ from rlbench.action_modes.action_mode import (
     JointPositionRelativeActionMode,
     EEPlannerAbsoluteActionMode,
     EEPlannerRelativeActionMode,
+    EEIKRelativeActionMode,
 )
 
 from rlbench.environment import Environment
@@ -73,11 +74,13 @@ class RLBenchEnv(gym.Env):
         if self.action_type == "ee_pose_absolute":
             self.action_mode = EEPlannerAbsoluteActionMode()
         elif self.action_type == "ee_pose_relative":
-            self.action_mode = EEPlannerRelativeActionMode()
+            # self.action_mode = EEPlannerRelativeActionMode()
+            self.action_mode = EEIKRelativeActionMode()
         elif self.action_type == "joint_position_absolute":
             self.action_mode = JointPositionAbsoluteActionMode()
         elif self.action_type == "joint_position_relative":
             self.action_mode = JointPositionRelativeActionMode()
+
         else:
             raise ValueError("Unrecognised action type: %s." % self.action_type)
 
@@ -138,7 +141,13 @@ class RLBenchEnv(gym.Env):
         Only include gripper_pose, gipper_open and task_low_dim_state
         """
         gym_obs = []
-        for state_name in ["gripper_pose", "gripper_open", "task_low_dim_state"]:
+        for state_name in [
+            "gripper_pose",
+            "gripper_open",
+            "joint_positions",
+            "joint_velocities",
+            "task_low_dim_state",
+        ]:
             state_data = getattr(rlbench_obs, state_name)
             if state_data is not None:
                 state_data = np.float32(state_data)
@@ -200,10 +209,12 @@ class RLBenchEnv(gym.Env):
     def step(self, action):
         info = {"failed_step": False}
         try:
+            action = action.flatten()
             obs, reward, terminated = self.rlbench_task_env.step(action)
             self.obs_history.append(obs)
             return self._extract_obs(obs), reward, terminated, False, info
-        except Exception as e:
+        except Exception as e:  # do nothing
+            logging.info(f"Failed step: {e}")
             info["failed_step"] = True
             dummy_next_state = self._extract_obs(
                 self.obs_history[-1]

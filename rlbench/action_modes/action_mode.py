@@ -7,6 +7,7 @@ from rlbench.action_modes.arm_action_modes import (
     ArmActionMode,
     JointPosition,
     EndEffectorPoseViaPlanning,
+    EndEffectorPoseViaIK,
 )
 from rlbench.action_modes.gripper_action_modes import (
     GripperActionMode,
@@ -226,6 +227,50 @@ class EEPlannerRelativeActionMode(ActionMode):
     def __init__(self):
         super(EEPlannerRelativeActionMode, self).__init__(
             EndEffectorPoseViaPlanning(absolute_mode=False), Discrete()
+        )
+
+    def action(self, scene, action):
+        # create a valid quternion (qx, qy, qz, qw) from Euler angles (theta_x, theta_y, theta_z)
+        arm_act_size = 6  # 3 position + 3 Euler angles
+        arm_action = np.array(action[:arm_act_size])
+        pos = arm_action[:3]
+        euler = arm_action[3:]
+        rot = Rotation.from_euler("xyz", euler, degrees=True)
+        quat = rot.as_quat(canonical=True, scalar_first=False)
+
+        # apply arm action
+        arm_action = np.concatenate([pos, quat])
+        self.arm_action_mode.action(scene, arm_action)
+
+        # apply gripper action
+        ee_action = np.array(action[arm_act_size:])
+        self.gripper_action_mode.action(scene, ee_action)
+
+    def action_shape(self, scene):
+        # 3 position + 3 Euler angles (theta_x, theta_y, theta_z) + 1 gripper
+        return 7
+
+    def action_bounds(self):
+        """
+        Returns the min and max of the action mode.
+        [x,y,z,theta_x, theta_y, theta_z, gripper_open]
+        all angles are in degrees
+        """
+
+        low = np.array([-0.01, -0.01, -0.01] + 3 * [-3] + [0.0])
+        high = np.array([0.01, 0.01, 0.01] + 3 * [3] + [1.0])
+        return low, high
+
+
+class EEIKRelativeActionMode(ActionMode):
+    """
+    An action mode that allows the end effector to be moved to a target pose
+    using the planner. The gripper is controlled using a discrete action space.
+    """
+
+    def __init__(self):
+        super(EEIKRelativeActionMode, self).__init__(
+            EndEffectorPoseViaIK(absolute_mode=False), Discrete()
         )
 
     def action(self, scene, action):
