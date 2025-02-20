@@ -6,6 +6,7 @@ from scipy.spatial.transform import Rotation
 from rlbench.action_modes.arm_action_modes import (
     ArmActionMode,
     JointPosition,
+    JointVelocity,
     EndEffectorPoseViaPlanning,
     EndEffectorPoseViaIK,
 )
@@ -62,37 +63,6 @@ class MoveArmThenGripper(ActionMode):
 # common action modes for you to choose from.
 
 
-class JointPositionRelativeActionMode(ActionMode):
-    """A pre-set, delta joint position action mode or arm and abs for gripper.
-
-    Both the arm and gripper action are applied at the same time.
-    """
-
-    def __init__(self):
-        super(JointPositionRelativeActionMode, self).__init__(
-            JointPosition(False), GripperJointPosition(True)
-        )
-
-    def action(self, scene: Scene, action: np.ndarray):
-        arm_act_size = np.prod(self.arm_action_mode.action_shape(scene))
-        arm_action = np.array(action[:arm_act_size])
-        ee_action = np.array(action[arm_act_size:])
-        self.arm_action_mode.action_pre_step(scene, arm_action)
-        self.gripper_action_mode.action_pre_step(scene, ee_action)
-        scene.step()
-        self.arm_action_mode.action_post_step(scene, arm_action)
-        self.gripper_action_mode.action_post_step(scene, ee_action)
-
-    def action_shape(self, scene: Scene):
-        return np.prod(self.arm_action_mode.action_shape(scene)) + np.prod(
-            self.gripper_action_mode.action_shape(scene)
-        )
-
-    def action_bounds(self):
-        """Returns the min and max of the action mode."""
-        return np.array(7 * [-0.1] + [0.0]), np.array(7 * [0.1] + [0.04 + 1e-4])
-
-
 class JointPositionAbsoluteActionMode(ActionMode):
     """A pre-set, delta joint position action mode or arm and abs for gripper.
 
@@ -122,6 +92,64 @@ class JointPositionAbsoluteActionMode(ActionMode):
     def action_bounds(self):
         """Returns the min and max of the action mode."""
         return np.array(7 * [-np.pi] + [0.0]), np.array(7 * [np.pi] + [0.04 + 1e-4])
+
+
+class JointPositionRelativeActionMode(ActionMode):
+    """A pre-set, delta joint position action mode or arm and abs for gripper.
+
+    Both the arm and gripper action are applied at the same time.
+    """
+
+    def __init__(self):
+        super(JointPositionRelativeActionMode, self).__init__(
+            JointPosition(False), GripperJointPosition(True)
+        )
+
+    def action(self, scene: Scene, action: np.ndarray):
+        arm_act_size = np.prod(self.arm_action_mode.action_shape(scene))
+        arm_action = np.array(action[:arm_act_size])
+        ee_action = np.array(action[arm_act_size:])
+        self.arm_action_mode.action_pre_step(scene, arm_action)
+        self.gripper_action_mode.action_pre_step(scene, ee_action)
+        scene.step()
+        self.arm_action_mode.action_post_step(scene, arm_action)
+        self.gripper_action_mode.action_post_step(scene, ee_action)
+
+    def action_shape(self, scene: Scene):
+        return np.prod(self.arm_action_mode.action_shape(scene)) + np.prod(
+            self.gripper_action_mode.action_shape(scene)
+        )
+
+    def action_bounds(self):
+        """Returns the min and max of the action mode."""
+        return np.array(7 * [-0.01] + [0.0]), np.array(7 * [0.01] + [0.04 + 1e-4])
+
+
+class JointVelocityAbsoluteActionMode(ActionMode):
+    def __init__(self):
+        super(JointVelocityAbsoluteActionMode, self).__init__(
+            JointVelocity(), GripperJointPosition(True)
+        )
+
+    def action(self, scene: Scene, action: np.ndarray):
+        arm_act_size = np.prod(self.arm_action_mode.action_shape(scene))
+        arm_action = np.array(action[:arm_act_size])
+        ee_action = np.array(action[arm_act_size:])
+        self.arm_action_mode.action_pre_step(scene, arm_action)
+        self.gripper_action_mode.action_pre_step(scene, ee_action)
+        scene.step()
+        self.arm_action_mode.action_post_step(scene, arm_action)
+        self.gripper_action_mode.action_post_step(scene, ee_action)
+
+    def action_shape(self, scene: Scene):
+        return np.prod(self.arm_action_mode.action_shape(scene)) + np.prod(
+            self.gripper_action_mode.action_shape(scene)
+        )
+
+    def action_bounds(self):
+        """Returns the min and max of the action mode."""
+        # TODO: check the bounds (from Demo)
+        return np.array(7 * [-0.8] + [0.0]), np.array(7 * [0.8] + [0.04 + 1e-4])
 
 
 class EEPlannerAbsoluteActionMode(ActionMode):
@@ -257,8 +285,8 @@ class EEPlannerRelativeActionMode(ActionMode):
         all angles are in degrees
         """
 
-        low = np.array([-0.01, -0.01, -0.01] + 3 * [-3] + [0.0])
-        high = np.array([0.01, 0.01, 0.01] + 3 * [3] + [1.0])
+        low = np.array([-0.005, -0.005, -0.005] + 3 * [-0.5] + [0.0])
+        high = np.array([0.005, 0.005, 0.005] + 3 * [0.5] + [1.0])
         return low, high
 
 
@@ -301,6 +329,6 @@ class EEIKRelativeActionMode(ActionMode):
         all angles are in degrees
         """
 
-        low = np.array([-0.01, -0.01, -0.01] + 3 * [-3] + [0.0])
-        high = np.array([0.01, 0.01, 0.01] + 3 * [3] + [1.0])
+        low = np.array([-0.01, -0.01, -0.01] + 3 * [-1] + [0.0])
+        high = np.array([0.01, 0.01, 0.01] + 3 * [1] + [1.0])
         return low, high

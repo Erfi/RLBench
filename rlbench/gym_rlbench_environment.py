@@ -20,6 +20,7 @@ from rlbench.action_modes.action_mode import (
     EEPlannerAbsoluteActionMode,
     EEPlannerRelativeActionMode,
     EEIKRelativeActionMode,
+    JointVelocityAbsoluteActionMode,
 )
 
 from rlbench.environment import Environment
@@ -80,6 +81,8 @@ class RLBenchEnv(gym.Env):
             self.action_mode = JointPositionAbsoluteActionMode()
         elif self.action_type == "joint_position_relative":
             self.action_mode = JointPositionRelativeActionMode()
+        elif self.action_type == "joint_velocity_absolute":
+            self.action_mode = JointVelocityAbsoluteActionMode()
 
         else:
             raise ValueError("Unrecognised action type: %s." % self.action_type)
@@ -219,8 +222,6 @@ class RLBenchEnv(gym.Env):
             dummy_next_state = self._extract_obs(
                 self.obs_history[-1]
             )  # Don't change the state
-            # HACK: since terminated is True, the next_state is not used
-            # TODO Reward should be scaled according to the env's reward scaling wrapper
             return (dummy_next_state, 0.0, True, False, info)
 
     def close(self) -> None:
