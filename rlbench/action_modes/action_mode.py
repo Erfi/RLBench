@@ -164,15 +164,13 @@ class EEPlannerAbsoluteActionMode(ActionMode):
         )
 
     def action(self, scene, action):
-        # create a valid quternion (qx, qy, qz, qw) from the action
-        arm_act_size = np.prod(self.arm_action_mode.action_shape(scene))
+        # create a valid quternion (qx, qy, qz, qw) from Euler angles (theta_x, theta_y, theta_z)
+        arm_act_size = 6  # 3 position + 3 Euler angles
         arm_action = np.array(action[:arm_act_size])
         pos = arm_action[:3]
-        quat = arm_action[3:]
-        quat_norm = np.linalg.norm(quat)
-        if not np.isclose(quat_norm, 1.0):
-            # Not a valid quaternion, normalize it
-            quat = quat / quat_norm
+        euler = arm_action[3:]
+        rot = Rotation.from_euler("xyz", euler, degrees=True)
+        quat = rot.as_quat(canonical=True, scalar_first=False)
 
         # apply arm action
         arm_action = np.concatenate([pos, quat])
@@ -183,67 +181,19 @@ class EEPlannerAbsoluteActionMode(ActionMode):
         self.gripper_action_mode.action(scene, ee_action)
 
     def action_shape(self, scene):
-        # 3 position + 4 quaternion (qx, qy, qz, qw) + 1 gripper
-        return np.prod(self.arm_action_mode.action_shape(scene)) + np.prod(
-            self.gripper_action_mode.action_shape(scene)
-        )
+        # 3 position + 3 Euler angles (theta_x, theta_y, theta_z) + 1 gripper
+        return 7
 
     def action_bounds(self):
-        """Returns the min and max of the action mode."""
-        low = np.array([-0.32, -0.45, 0.75] + 4 * [-1.0] + [0.0])
-        high = np.array([0.32, 0.45, 1.75] + 4 * [1.0] + [1.0])
+        """
+        Returns the min and max of the action mode.
+        [x,y,z,theta_x, theta_y, theta_z, gripper_open]
+        all angles are in degrees
+        """
+
+        low = np.array([-0.32, -0.45, 0.75] + 3 * [-180] + [0.0])
+        high = np.array([0.32, 0.45, 1.7] + 3 * [180] + [1.0])
         return low, high
-
-
-# class EEPlannerRelativeActionModeQUATERNION(ActionMode):
-#     """
-#     An action mode that allows the end effector to be moved to a target pose
-#     using the planner. The gripper is controlled using a discrete action space.
-#     """
-
-#     def __init__(self):
-#         super(EEPlannerRelativeActionMode, self).__init__(
-#             EndEffectorPoseViaPlanning(absolute_mode=False), Discrete()
-#         )
-
-#     def action(self, scene, action):
-#         # create a valid quternion (qx, qy, qz, qw) from the action (ai, bj, ck, angle)
-#         arm_act_size = np.prod(self.arm_action_mode.action_shape(scene))
-#         arm_action = np.array(action[:arm_act_size])
-#         pos = arm_action[:3]
-#         quat = arm_action[3:]
-#         quat_norm = np.linalg.norm(quat)
-#         if not np.isclose(quat_norm, 1.0):
-#             # Not a valid quaternion, normalize it
-#             angle_rad = quat[-1]
-#             sin_half_angle = np.sin(angle_rad / 2)
-#             cos_half_angle = np.cos(angle_rad / 2)
-#             quat = [
-#                 quat[0] * sin_half_angle,
-#                 quat[1] * sin_half_angle,
-#                 quat[2] * sin_half_angle,
-#                 cos_half_angle,
-#             ]
-
-#         # apply arm action
-#         arm_action = np.concatenate([pos, quat])
-#         self.arm_action_mode.action(scene, arm_action)
-
-#         # apply gripper action
-#         ee_action = np.array(action[arm_act_size:])
-#         self.gripper_action_mode.action(scene, ee_action)
-
-#     def action_shape(self, scene):
-#         # 3 position + 4 quaternion (qx, qy, qz, w) + 1 gripper
-#         return np.prod(self.arm_action_mode.action_shape(scene)) + np.prod(
-#             self.gripper_action_mode.action_shape(scene)
-#         )
-
-#     def action_bounds(self):
-#         """Returns the min and max of the action mode."""
-#         low = np.array([-0.05, -0.05, -0.05] + 3 * [-0.1] + [-np.pi / 10] + [0.0])
-#         high = np.array([0.05, 0.05, 0.05] + 3 * [0.1] + [np.pi / 10] + [1.0])
-#         return low, high
 
 
 class EEPlannerRelativeActionMode(ActionMode):
@@ -299,6 +249,50 @@ class EEIKRelativeActionMode(ActionMode):
     def __init__(self):
         super(EEIKRelativeActionMode, self).__init__(
             EndEffectorPoseViaIK(absolute_mode=False), Discrete()
+        )
+
+    def action(self, scene, action):
+        # create a valid quternion (qx, qy, qz, qw) from Euler angles (theta_x, theta_y, theta_z)
+        arm_act_size = 6  # 3 position + 3 Euler angles
+        arm_action = np.array(action[:arm_act_size])
+        pos = arm_action[:3]
+        euler = arm_action[3:]
+        rot = Rotation.from_euler("xyz", euler, degrees=True)
+        quat = rot.as_quat(canonical=True, scalar_first=False)
+
+        # apply arm action
+        arm_action = np.concatenate([pos, quat])
+        self.arm_action_mode.action(scene, arm_action)
+
+        # apply gripper action
+        ee_action = np.array(action[arm_act_size:])
+        self.gripper_action_mode.action(scene, ee_action)
+
+    def action_shape(self, scene):
+        # 3 position + 3 Euler angles (theta_x, theta_y, theta_z) + 1 gripper
+        return 7
+
+    def action_bounds(self):
+        """
+        Returns the min and max of the action mode.
+        [x,y,z,theta_x, theta_y, theta_z, gripper_open]
+        all angles are in degrees
+        """
+
+        low = np.array([-0.01, -0.01, -0.01] + 3 * [-1] + [0.0])
+        high = np.array([0.01, 0.01, 0.01] + 3 * [1] + [1.0])
+        return low, high
+
+
+class EEIKAbsoluteActionMode(ActionMode):
+    """
+    An action mode that allows the end effector to be moved to a target pose
+    using the planner. The gripper is controlled using a discrete action space.
+    """
+
+    def __init__(self):
+        super(EEIKAbsoluteActionMode, self).__init__(
+            EndEffectorPoseViaIK(absolute_mode=True), Discrete()
         )
 
     def action(self, scene, action):

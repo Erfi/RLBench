@@ -20,12 +20,12 @@ from rlbench.action_modes.action_mode import (
     EEPlannerAbsoluteActionMode,
     EEPlannerRelativeActionMode,
     EEIKRelativeActionMode,
+    EEIKAbsoluteActionMode,
     JointVelocityAbsoluteActionMode,
 )
 
 from rlbench.environment import Environment
 from rlbench.observation_config import ObservationConfig
-from rlbench.utils import GripperPoseBox
 
 
 logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.INFO)
@@ -74,6 +74,7 @@ class RLBenchEnv(gym.Env):
 
         if self.action_type == "ee_pose_absolute":
             self.action_mode = EEPlannerAbsoluteActionMode()
+            # self.action_mode = EEIKAbsoluteActionMode()
         elif self.action_type == "ee_pose_relative":
             # self.action_mode = EEPlannerRelativeActionMode()
             self.action_mode = EEIKRelativeActionMode()
@@ -218,6 +219,7 @@ class RLBenchEnv(gym.Env):
             return self._extract_obs(obs), reward, terminated, False, info
         except Exception as e:  # do nothing
             logging.info(f"Failed step: {e}")
+            self.obs_history.append(self.obs_history[0])
             info["failed_step"] = True
             dummy_next_state = self._extract_obs(
                 self.obs_history[-1]
