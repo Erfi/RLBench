@@ -477,10 +477,20 @@ def get_relative_position(pos1, pos2):
 
 
 def get_relative_quaternion(quat1, quat2):
+    """
+    quat1 and quat2 are 4D vectors [x, y, z, w] with w being the scalar part
+    returns the relative quaternion from quat1 to quat2 with the scalar part being positive
+    """
+    if quat1[-1] < 0:
+        quat1 = -quat1
+    if quat2[-1] < 0:
+        quat2 = -quat2
     quat1 = Quaternion(quat1[-1], *quat1[:-1])
     quat2 = Quaternion(quat2[-1], *quat2[:-1])
     relative_quat = quat2 * quat1.inverse
     relative_quat = np.array(
         [relative_quat.x, relative_quat.y, relative_quat.z, relative_quat.w]
     )
+    if relative_quat[-1] < 0:
+        relative_quat = -relative_quat
     return relative_quat

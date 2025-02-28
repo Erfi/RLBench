@@ -76,8 +76,8 @@ class RLBenchEnv(gym.Env):
             self.action_mode = EEPlannerAbsoluteActionMode()
             # self.action_mode = EEIKAbsoluteActionMode()
         elif self.action_type == "ee_pose_relative":
-            # self.action_mode = EEPlannerRelativeActionMode()
-            self.action_mode = EEIKRelativeActionMode()
+            self.action_mode = EEPlannerRelativeActionMode()
+            # self.action_mode = EEIKRelativeActionMode()
         elif self.action_type == "joint_position_absolute":
             self.action_mode = JointPositionAbsoluteActionMode()
         elif self.action_type == "joint_position_relative":
@@ -148,8 +148,8 @@ class RLBenchEnv(gym.Env):
         for state_name in [
             "gripper_pose",
             "gripper_open",
-            "joint_positions",
-            "joint_velocities",
+            # "joint_positions",
+            # "joint_velocities",
             "task_low_dim_state",
         ]:
             state_data = getattr(rlbench_obs, state_name)

@@ -164,25 +164,40 @@ class EEPlannerAbsoluteActionMode(ActionMode):
         )
 
     def action(self, scene, action):
-        # create a valid quternion (qx, qy, qz, qw) from Euler angles (theta_x, theta_y, theta_z)
-        arm_act_size = 6  # 3 position + 3 Euler angles
+        # --- using quaternion ---
+        arm_act_size = 7  # 3 position + 4 quaternion
         arm_action = np.array(action[:arm_act_size])
-        pos = arm_action[:3]
-        euler = arm_action[3:]
-        rot = Rotation.from_euler("xyz", euler, degrees=True)
-        quat = rot.as_quat(canonical=True, scalar_first=False)
-
-        # apply arm action
-        arm_action = np.concatenate([pos, quat])
+        # make unit_quaternion
+        arm_action[3:] = arm_action[3:] / np.linalg.norm(arm_action[3:])
+        if arm_action[3] < 0:
+            arm_action[3:] = -arm_action[3:]
+        gripper_action = np.array(action[arm_act_size:])
         self.arm_action_mode.action(scene, arm_action)
+        self.gripper_action_mode.action(scene, gripper_action)
 
-        # apply gripper action
-        ee_action = np.array(action[arm_act_size:])
-        self.gripper_action_mode.action(scene, ee_action)
+        # --- converting from Euler angles to quaternions ---
+        # # create a valid quternion (qx, qy, qz, qw) from Euler angles (theta_x, theta_y, theta_z)
+        # arm_act_size = 6  # 3 position + 3 Euler angles
+        # arm_action = np.array(action[:arm_act_size])
+        # pos = arm_action[:3]
+        # euler = arm_action[3:]
+        # rot = Rotation.from_euler("xyz", euler, degrees=True)
+        # quat = rot.as_quat(canonical=True, scalar_first=False)
+
+        # # apply arm action
+        # arm_action = np.concatenate([pos, quat])
+        # self.arm_action_mode.action(scene, arm_action)
+
+        # # apply gripper action
+        # ee_action = np.array(action[arm_act_size:])
+        # self.gripper_action_mode.action(scene, ee_action)
 
     def action_shape(self, scene):
+        # 3 position + quoternion (qx, qy, qz, qw) + gripper
+        return 8
+
         # 3 position + 3 Euler angles (theta_x, theta_y, theta_z) + 1 gripper
-        return 7
+        # return 7
 
     def action_bounds(self):
         """
@@ -190,9 +205,12 @@ class EEPlannerAbsoluteActionMode(ActionMode):
         [x,y,z,theta_x, theta_y, theta_z, gripper_open]
         all angles are in degrees
         """
-
-        low = np.array([-0.32, -0.45, 0.75] + 3 * [-180] + [0.0])
-        high = np.array([0.32, 0.45, 1.7] + 3 * [180] + [1.0])
+        # --- using quaternion ---
+        low = np.array([-0.32, -0.45, 0.75] + 3 * [-1.0] + [0.0] + [0.0])
+        high = np.array([0.32, 0.45, 1.7] + 3 * [1.0] + [1.0] + [1.0])
+        # --- using Euler angles ---
+        # low = np.array([-0.32, -0.45, 0.75] + 3 * [-180] + [0.0])
+        # high = np.array([0.32, 0.45, 1.7] + 3 * [180] + [1.0])
         return low, high
 
 
@@ -235,8 +253,8 @@ class EEPlannerRelativeActionMode(ActionMode):
         all angles are in degrees
         """
 
-        low = np.array([-0.005, -0.005, -0.005] + 3 * [-0.5] + [0.0])
-        high = np.array([0.005, 0.005, 0.005] + 3 * [0.5] + [1.0])
+        low = np.array([-0.05, -0.05, -0.05] + 3 * [-1.0] + [0.0])
+        high = np.array([0.05, 0.05, 0.05] + 3 * [1.0] + [1.0])
         return low, high
 
 
